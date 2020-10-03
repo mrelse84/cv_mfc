@@ -68,6 +68,8 @@ BEGIN_MESSAGE_MAP(CcvmfcDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_WM_DESTROY()
 	ON_WM_TIMER()
+	ON_BN_CLICKED(IDC_BTN_LOAD, &CcvmfcDlg::OnBnClickedBtnLoad)
+	ON_BN_CLICKED(IDC_BTN_LIVE, &CcvmfcDlg::OnBnClickedBtnLive)
 END_MESSAGE_MAP()
 
 
@@ -114,7 +116,7 @@ BOOL CcvmfcDlg::OnInitDialog()
 	capture->set(CAP_PROP_FRAME_WIDTH, 320);
 	capture->set(CAP_PROP_FRAME_HEIGHT, 240);
 
-	SetTimer(1000, 30, NULL);
+	//SetTimer(1000, 30, NULL);
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -191,8 +193,56 @@ void CcvmfcDlg::OnTimer(UINT_PTR nIDEvent)
 	//여기에서는 그레이스케일 이미지로 변환합니다.
 	cvtColor(mat_frame, mat_frame, COLOR_BGR2GRAY);
 
+	ShowImage();
+
+	CDialogEx::OnTimer(nIDEvent);
+}
 
 
+void CcvmfcDlg::OnBnClickedBtnLoad()
+{
+	char szFilter[] = "Image Files (*.bmp;*.jpg;*.png)|*.bmp;*.jpg;*.png|All Files (*.*)|*.*||";
+
+	//CFileDialog dlg(TRUE, NULL, NULL, OFN_HIDEREADONLY, szFilter);
+	CFileDialog dlg((BOOL)TRUE, NULL, NULL, OFN_HIDEREADONLY, (LPCTSTR)szFilter);
+	if (dlg.DoModal() == IDOK)
+	{
+		CString strFile = dlg.GetPathName();
+		char szFile[1000];
+		//strcpy(szFile, (LPSTR)(LPCTSTR)strFile);
+		strcpy(szFile, (LPSTR)strFile.GetBuffer(0));
+
+		mat_frame = imread(szFile, IMREAD_UNCHANGED);
+		//int bpp = 8 * mat_frame.elemSize();
+		//if (bpp == 24)
+		//{
+		//	cvtColor(mat_frame, mat_frame, COLOR_BGR2RGB);
+		//}
+		ShowImage(); // 직접 표시 함수 호출
+	}
+}
+
+
+void CcvmfcDlg::OnBnClickedBtnLive()
+{
+	CButton* pBtn = (CButton*)GetDlgItem(IDC_BTN_LIVE);
+	CString strText;
+	pBtn->GetWindowText(strText);
+	if (strText.Find(_T("Live On")) != -1)
+	{
+		SetTimer(1000, 30, NULL);
+		pBtn->SetWindowText(_T("Live Off"));
+	}
+	else
+	{
+		KillTimer(1000);
+		pBtn->SetWindowText(_T("Live On"));
+	}
+}
+
+
+void CcvmfcDlg::ShowImage()
+{
 	//화면에 보여주기 위한 처리입니다.
 	int bpp = 8 * mat_frame.elemSize();
 	assert((bpp == 8 || bpp == 24 || bpp == 32));
@@ -287,10 +337,16 @@ void CcvmfcDlg::OnTimer(UINT_PTR nIDEvent)
 		int imgWidth = mat_temp.cols - border;
 		int imgHeight = mat_temp.rows;
 
+		// 아래가 있어야 Color가 깨지지 않는다
+		SetStretchBltMode(cimage_mfc.GetDC(), STRETCH_DELETESCANS);
+
 		StretchDIBits(cimage_mfc.GetDC(),
 			destx, desty, destw, desth,
 			imgx, imgy, imgWidth, imgHeight,
 			mat_temp.data, bitInfo, DIB_RGB_COLORS, SRCCOPY);
+
+		// 여기서 한 번 ReleaseDC를 해 주어야 아래 cimage_mfc.Destroy()에서 에러가 나지 않는다
+		cimage_mfc.ReleaseDC(); 
 	}
 
 
@@ -302,6 +358,4 @@ void CcvmfcDlg::OnTimer(UINT_PTR nIDEvent)
 
 	cimage_mfc.ReleaseDC();
 	cimage_mfc.Destroy();
-
-	CDialogEx::OnTimer(nIDEvent);
 }
